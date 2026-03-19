@@ -1,4 +1,5 @@
 name: Twitch Audio Recorder
+
 on:
   schedule:
     - cron: '*/10 * * * *' # Проверка каждые 10 минут
@@ -15,14 +16,15 @@ jobs:
 
       - name: Record Audio Only
         run: |
-          # Замените ВАШ_КАНАЛ на ник стримера (например, twitch.tv/gaules)
-          # Записываем только звук (audio_only), чтобы файл был легким
-          # --max-run-time 10s — лимит работы GitHub (6 часов)
-          streamlink twitch.tv/sanhez audio_only -o stream_audio.mp4 --twitch-disable-ads --retry-streams 30
+          # Используем системный timeout для ограничения записи в 10 секунд
+          # --twitch-disable-ads пропустит рекламу
+          # --retry-streams 30 будет пытаться подключиться, если стрим еще не начался
+          timeout 10s streamlink twitch.tv/sanhez audio_only -o stream_audio.mp4 --twitch-disable-ads --retry-streams 30 || true
 
       - name: Upload Audio
         uses: actions/upload-artifact@v4
         with:
+          # Добавляем ID запуска в имя, чтобы файлы не перезаписывались
           name: twitch-audio-${{ github.run_id }}
           path: stream_audio.mp4
-          retention-days: 3 # Файл удалится через 3 дня (экономим место)
+          retention-days: 3
