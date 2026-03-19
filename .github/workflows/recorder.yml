@@ -1,8 +1,7 @@
-name: Twitch Audio Recorder
-
+name: Twitch Auto Recorder
 on:
-  schedule:
-    - cron: '*/10 * * * *' # Проверка каждые 10 минут
+  repository_dispatch:
+    types: [twitch_online] # Сигнал от Pipedream
   workflow_dispatch: # Кнопка для ручного запуска
 
 jobs:
@@ -14,17 +13,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y streamlink
 
-      - name: Record Audio Only
+      - name: Record Audio 10s
         run: |
-          # Используем системный timeout для ограничения записи в 10 секунд
-          # --twitch-disable-ads пропустит рекламу
-          # --retry-streams 30 будет пытаться подключиться, если стрим еще не начался
-          timeout 10s streamlink twitch.tv/sanhez audio_only -o stream_audio.mp4 --twitch-disable-ads --retry-streams 30 || true
+          # Замените twitch.tv/sanhez на нужный канал
+          timeout 15s streamlink twitch.tv/sanhez audio_only -o stream_audio.mp4 --twitch-disable-ads || true
 
-      - name: Upload Audio
+      - name: Upload to GitHub
         uses: actions/upload-artifact@v4
         with:
-          # Добавляем ID запуска в имя, чтобы файлы не перезаписывались
-          name: twitch-audio-${{ github.run_id }}
+          name: record-${{ github.run_id }}
           path: stream_audio.mp4
-          retention-days: 3
+          retention-days: 1
