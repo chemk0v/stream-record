@@ -1,26 +1,39 @@
 name: Twitch Auto Recorder
+
 on:
-  repository_dispatch:
-    types: [twitch_online] # Сигнал от Pipedream
-  workflow_dispatch: # Кнопка для ручного запуска
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Ник стримера'
+        required: true
+        default: 'pwgood' # Теперь по умолчанию стоит pwgood
 
 jobs:
   record:
     runs-on: ubuntu-latest
+    timeout-minutes: 360 # Лимит GitHub 6 часов
+
     steps:
       - name: Install Streamlink
         run: |
           sudo apt-get update
           sudo apt-get install -y streamlink
 
-      - name: Record Audio 10s
+      - name: Record Audio
         run: |
-          # Замените twitch.tv/sanhez на нужный канал
-          timeout 15s streamlink twitch.tv/sanhez audio_only -o stream_audio.mp4 --twitch-disable-ads || true
+          # Используем канал из Pipedream или берем значение по умолчанию
+          CHANNEL="${{ github.event.inputs.channel || 'pwgood' }}"
+          echo "Начинаю запись канала: $CHANNEL"
+          
+          # Записываем до конца стрима (или пока не пройдут 6 часов)
+          # --retry-streams 60 заставляет ждать минуту, если интернет моргнет
+          streamlink twitch.tv/$CHANNEL audio_only -o stream_audio.mp4 --twitch-disable-ads --retry-streams 60 --retry-max 30 || true
 
       - name: Upload to GitHub
+        if: always() # Сохранить файл в любом случае
         uses: actions/upload-artifact@v4
         with:
-          name: record-${{ github.run_id }}
+          # В названии архива будет ник и уникальный ID
+          name: record-${{ github.event.inputs.channel || 'stream' }}-${{ github.run_id }}
           path: stream_audio.mp4
           retention-days: 1
