@@ -18,7 +18,7 @@ jobs:
           # Замените ВАШ_КАНАЛ на ник стримера (например, twitch.tv/gaules)
           # Записываем только звук (audio_only), чтобы файл был легким
           # --max-run-time 6h — лимит работы GitHub (6 часов)
-          streamlink twitch.tv/infer_f audio_only -o stream_audio.mp4 --twitch-disable-ads --retry-streams 30
+          streamlink twitch.tv/sanhez audio_only -o stream_audio.mp4 --twitch-disable-ads --retry-streams 30
 
       - name: Upload Audio
         uses: actions/upload-artifact@v4
