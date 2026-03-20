@@ -1,4 +1,4 @@
-name: Twitch Auto Recorder
+name: Twitch Auto Audio to Telegram
 
 on:
   workflow_dispatch:
@@ -6,34 +6,57 @@ on:
       channel:
         description: 'Ник стримера'
         required: true
-        default: 'pwgood' # Теперь по умолчанию стоит pwgood
+        default: 'pwgood'
+  # Добавляем этот блок, чтобы Pipedream мог запускать скрипт сам
+  repository_dispatch:
+    types: [start_record]
 
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # Лимит GitHub 6 часов
+    timeout-minutes: 360 
 
     steps:
-      - name: Install Streamlink
+      - name: Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y streamlink
+          sudo apt-get install -y streamlink ffmpeg
 
       - name: Record Audio
         run: |
-          # Используем канал из Pipedream или берем значение по умолчанию
-          CHANNEL="${{ github.event.inputs.channel || 'pwgood' }}"
-          echo "Начинаю запись канала: $CHANNEL"
+          # Берем ник из Pipedream или из ручного ввода
+          CHANNEL="${{ github.event.client_payload.streamer || github.event.inputs.channel || 'pwgood' }}"
+          echo "Записываю аудио канала: $CHANNEL"
           
-          # Записываем до конца стрима (или пока не пройдут 6 часов)
-          # --retry-streams 60 заставляет ждать минуту, если интернет моргнет
+          # Запись только звука
           streamlink twitch.tv/$CHANNEL audio_only -o stream_audio.mp4 --twitch-disable-ads --retry-streams 60 --retry-max 30 || true
 
-      - name: Upload to GitHub
-        if: always() # Сохранить файл в любом случае
+      - name: Split and Send to Telegram
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TG_TO: ${{ secrets.TELEGRAM_TO }}
+        run: |
+          if [ -s "stream_audio.mp4" ]; then
+            echo "Файл есть, начинаю нарезку по 45 минут..."
+            mkdir -p parts
+            # Режем файл на куски по 2700 секунд (45 мин) без потери качества
+            ffmpeg -i stream_audio.mp4 -f segment -segment_time 2700 -c copy parts/part_%03d.mp4
+            
+            for file in parts/*.mp4; do
+              echo "Отправка $file в Telegram..."
+              curl -v -F "document=@$file" \
+              "https://api.telegram.org"
+              sleep 5 # Пауза, чтобы не спамить Telegram
+            done
+          else
+            echo "Запись пуста или не создана. Возможно, стрим еще не начался."
+          fi
+
+      - name: Backup to GitHub Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          # В названии архива будет ник и уникальный ID
-          name: record-${{ github.event.inputs.channel || 'stream' }}-${{ github.run_id }}
+          name: full-record-${{ github.run_id }}
           path: stream_audio.mp4
-          retention-days: 1
+          retention-days: 7
